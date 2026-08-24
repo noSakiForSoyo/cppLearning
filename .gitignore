@@ -3,8 +3,11 @@ a.out
 *.o
 *.obj
 *.exe
+test
+test.exe
 build/
 cmake-build-*/
+.vs/
 
 # ===== 版权书籍 PDF（切勿上传，有 DMCA 下架风险）=====
 *.pdf
@@ -22,4 +25,3 @@ cmake-build-*/
 # ===== Obsidian 本地配置 =====
 .obsidian/
 .trash/
-
