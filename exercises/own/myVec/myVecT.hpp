@@ -1,56 +1,71 @@
-#include "myVec.hpp"
+#ifndef MY_VEC_T
+#define MY_VEC_T
+#include <iostream>
 
-    myVec::myVec():size_(0),capacity_(1),data_(nullptr){
+template <typename T>
+class myVec;
+
+template <typename T>
+std::ostream& operator<<(std::ostream &os,const myVec<T> &a);
+
+template <typename T>
+class myVec{
+private:
+    int size_;
+    int capacity_;
+    T *data_;
+public:
+    myVec():size_(0),capacity_(1),data_(nullptr){
     }
-    myVec::myVec(const myVec &other){
+    myVec(const myVec &other){
         this->size_ = other.size_;
         this->capacity_ = other.capacity_;
-        this->data_ = new int[capacity_];
-        int *p = this->data_;
-        int *op = other.data_;
+        this->data_ = new T[capacity_];
+        T *p = this->data_;
+        T *op = other.data_;
         for(int i = 0;i!=this->size_;++i){
             *p=*op;
             ++p;
             ++op;
         }
     }
-    myVec::myVec(myVec &&other):
+    myVec noexcept(myVec &&other):
     size_(other.size_),capacity_(other.capacity_),data_(other.data_){
         other.size_ = 0;
         other.capacity_=1;
         other.data_=nullptr;
     }
-    myVec::~myVec(){
+    ~myVec(){
         delete[] data_;
     }
 
-    int myVec::size() const{
+    int size() const{
         return size_;
     }
-    int myVec::capacity() const{
+    int capacity() const{
         return capacity_;
     }
-    int *myVec::begin(){
+    T *begin(){
         return this->data_;
     }
-    int *myVec::end(){
+    T *end(){
         return (this->data_)+size_;
     }
-    const int *myVec::begin()const{
+    const T *begin()const{
         return this->data_;
     }
-    const int *myVec::end()const{
+    const T *end()const{
         return (this->data_)+size_;
     }
-    void myVec::push_back(int value){
+    void push_back(T value){
         if(data_==nullptr){
-            data_ = new int[capacity_];
+            data_ = new T[capacity_];
         }
         if(size_ == capacity_){
             capacity_ = 2*capacity_;
-            int *newData = new int[capacity_];
-            int *np = newData;
-            int *p = data_;
+            T *newData = new T[capacity_];
+            T *np = newData;
+            T *p = data_;
             for(int i = 0;i!=size_;i++){
                 *np = *p;
                 ++p;
@@ -63,22 +78,22 @@
         size_++;
     }
 
-    bool myVec::operator==(const myVec &other) const{
+    bool operator==(const myVec &other) const{
         if(size_!=other.size_) return false;
         for (int i = 0; i != size_; ++i)
         if (data_[i] != other.data_[i]) return false;
         return true;
     } 
-    myVec &myVec::operator=(const myVec &other){
+    myVec &operator=(const myVec &other){
         if(this == &other){
             return *this;
         }
         this->size_ = other.size_;
         this->capacity_ = other.capacity_;
         delete[] this->data_;
-        this->data_ = new int[this->capacity_];
-        int *p = this->data_;
-        int *op = other.data_;
+        this->data_ = new T[this->capacity_];
+        T *p = this->data_;
+        T *op = other.data_;
         for(int i = 0;i<this->size_;++i){
             *p=*op;
             ++p;
@@ -86,7 +101,7 @@
         }
         return *this;
     }    
-    myVec &myVec::operator=(myVec &&other){
+    myVec &operator=  noexcept(myVec &&other){
         if(this==&other){
             return *this;
         }
@@ -99,40 +114,29 @@
         other.capacity_ = 1;
         return *this;
     }
-    int myVec::operator[](std::size_t n) const{
+    T operator[](std::size_t n) const{
         if(n>=this->size_){
             throw std::out_of_range("myVec: 索引越界");
         }
         return this->data_[n];
     }
-    int& myVec::operator[](std::size_t n){
+    T& operator[](std::size_t n){
         if(n>=this->size_){
             throw std::out_of_range("myVec: 索引越界");
         }
         return this->data_[n];
     }
-    std::ostream& operator<<(std::ostream &os,const myVec &a){
-        os << "{";
-        for(int i = 0;i!=a.size_;i++){
-            os << a.data_[i];
-            if(i!=a.size_-1) os << ','; 
-        }
-        os << "}";
-        return os;
+    friend std::ostream& operator<< <>(std::ostream &os,const myVec<T> &a);
+};
+template <typename T>
+std::ostream& operator<<(std::ostream &os,const myVec<T> &a){
+    os << "{";
+    for(int i = 0;i!=a.size_;i++){
+        os << a.data_[i];
+        if(i!=a.size_-1) os << ','; 
     }
-
-
-int main(){
-    myVec a;
-    a.push_back(1);
-    
-    int i;
-    while(std::cin >> i&&i!=6657){
-        a.push_back(i);
-        std::cout << a[1000] <<'\n';
-    }
-    for(auto it:a){
-        std::cout << it <<'\n';
-    }
-    
+    os << "}";
+    return os;
 }
+
+#endif
