@@ -9,7 +9,7 @@ int erosion_size = 0;
 int dilation_size = 0;
 const int max_size = 21; 
 const int size = 3;
-const int element[size][size] = {{10,10,10},{10,10,10},{10,10,10}};
+const int element[size][size] = {{1,1,1},{1,1,1},{1,1,1}};
 void erosion(const Mat &src,Mat &dst ,const int element[3][3]);
 void dilation(const Mat &src,Mat &dst ,const int element[3][3]);
 void erosionByAPI(int , void*);
