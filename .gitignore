@@ -25,3 +25,6 @@ cmake-build-*/
 # ===== Obsidian 本地配置 =====
 .obsidian/
 .trash/
+
+# ===== 私人随笔（不进入公开仓库）=====
+notes/c++learning/随笔/
