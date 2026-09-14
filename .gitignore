@@ -22,9 +22,16 @@ cmake-build-*/
 # *.jpeg
 # *.png
 
+# ===== 模板匹配素材大图（本地保留，不入库避免仓库膨胀）=====
+exercises/vision/c.png
+exercises/vision/d.png
+
 # ===== Obsidian 本地配置 =====
 .obsidian/
 .trash/
 
 # ===== 私人随笔（不进入公开仓库）=====
 notes/c++learning/随笔/
+
+# ===== 私人规划文档（不进入公开仓库）=====
+_private/
