@@ -1,24 +1,26 @@
-# C++ & Machine Vision Learning
+# C++ & Edge Vision Deployment Learning
 
-用 C++ 和视觉工具链解决实际产线上的图像处理问题，覆盖从图像预处理到检测流程落地的完整链路。
+面向**边缘视觉部署**岗位的系统学习仓库：用 C++ 在嵌入式 / 边缘设备上落地视觉算法与模型推理，覆盖从图像处理到部署优化的完整链路。
 
 ## 学习定位
 
+目标岗位：边缘视觉部署 / 边缘 AI 部署工程师（C++ 方向）。以工程落地为主，手写实现（Otsu、myVec）用于理解原理、拒绝黑箱，一切能力服务于"能在设备上跑起来、跑得快"。
+
 | 阶段 | 内容 | 定位 |
 |---|---|---|
-| 基础 | C++（Primer 精读 + 练习） | 语言地基 |
-| 图像处理 | OpenCV 应用（灰度 / HSV / 直方图 / 滤波 / 阈值） | 视觉核心能力 |
-| 工业视觉 | Halcon | 产线实战工具 |
-| 上位机 | Qt（界面 / 图像显示 / 交互） | 完整交付能力 |
+| 基础 | C++（Primer 精读 + 练习）、Linux 基础 | 语言与系统地基 |
+| 图像处理 | OpenCV 应用（预处理 / 检测 / 特征提取） | 视觉核心能力 |
+| 模型部署 | 模型转换（PyTorch → ONNX）、推理框架（ONNX Runtime / TensorRT / NCNN）、量化与加速 | 部署核心能力 |
+| 边缘设备 | Jetson / 瑞芯微 RK 系列等，交叉编译与性能调优 | 落地交付能力 |
 
 ## 14 个月学习时间线
 
 | 时间 | 阶段 | 状态 |
 |---|---|---|
-| 第 1~5 个月 | C++ 基础 + OpenCV（图像基础 → 滤波 → 阈值 → 边缘 → 轮廓） | 进行中 |
-| 第 6~9 个月 | Halcon 工业视觉（定位 / 测量 / 缺陷检测案例） | 未开始 |
-| 第 10~12 个月 | Qt 上位机（图像显示 / 参数界面 / 项目集成） | 未开始 |
-| 第 13~14 个月 | 综合项目：完整视觉检测 Demo（相机 + 算法 + 界面） | 未开始 |
+| 第 1~5 个月 | C++ 基础 + OpenCV（图像基础 → 滤波 → 阈值 → 边缘 / 匹配 → 相机模型） | 进行中 |
+| 第 6~8 个月 | Linux 与边缘设备基础（交叉编译、部署环境搭建） | 未开始 |
+| 第 9~11 个月 | 模型部署与推理优化（ONNX → 推理框架、量化、性能调优） | 未开始 |
+| 第 12~14 个月 | 综合项目：边缘设备上的实时视觉检测部署 | 未开始 |
 
 ## 目录结构
 
@@ -27,36 +29,40 @@ c++/
 ├── exercises/
 │   ├── primer/          # C++ Primer 章节练习（ch1~ch8）
 │   ├── vision/          # OpenCV 视觉应用练习
-│   │   ├── 1.Mat ~ 4.gamma      # 图像基础操作
-│   │   ├── 5.drawHist           # 直方图
-│   │   ├── 6.erosionDilation    # 腐蚀与膨胀
-│   │   ├── 7.otsuMethod         # Otsu 自动阈值（手写 + LUT）
-│   │   ├── 8.filter             # 空间域滤波（高斯/中值/双边）
-│   │   └── 9.dft                # 频域滤波（频谱图）
+│   │   ├── 1.Mat ~ 6.erosionDilation   # 图像基础 / 直方图 / 形态学
+│   │   ├── 7.otsuMethod       # Otsu 自动阈值（手写 + LUT + 验证）
+│   │   ├── 8.filter           # 空间域滤波
+│   │   ├── 9.dft              # 频域滤波（频谱图）
+│   │   ├── 10.connected       # 连通域分析
+│   │   ├── 11.sobelEdgeDetection  # Sobel 边缘检测
+│   │   ├── 12.canny           # Canny + 实时摄像头
+│   │   └── 13.matchTemplate   # 模板匹配
 │   └── own/             # 自主项目
-│       └── myVec/       # 手写 vector 容器（模板版：内存/拷贝/移动/运算符）
+│       └── myVec/       # 手写 vector 容器（模板版：内存 / 拷贝 / 移动 / 运算符）
 ├── notes/               # Obsidian 学习笔记（Markdown 双链）
 │   └── c++learning/
 │       ├── c++Notes/    # C++ 语言笔记
 │       ├── visionNotes/ # 视觉笔记
 │       └── leetcodeNotes/  # 刷题记录
-├── .vscode/             # VSCode 编译配置
+├── .vscode/             # 编译配置
 └── .gitignore
 ```
 
 ## 技术栈与环境
 
-- 语言：C++（C++11/14/17）
-- 视觉库：OpenCV 4.x（当前阶段）
-- 后续路线：Halcon、Qt
-- 编译：g++ + pkg-config（VSCode tasks 已配置 OpenCV 一键编译）
+- 语言：C++（C++11/14/17）、Python（模型转换与脚本）
+- 视觉库：OpenCV 4.x
+- 部署方向：ONNX Runtime / TensorRT / NCNN（后续阶段）
+- 系统：Linux（Ubuntu）+ 嵌入式 Linux
+- 目标设备：边缘设备（Jetson / 瑞芯微 RK 系列等，平台待定）
+- 开发环境：Windows + VS2022（当前）、Ubuntu VM（OpenCV 阶段）
 
 ## 学习资料
 
 - 《C++ Primer（第5版）》
 - 《数字图像处理（冈萨雷斯 第3版）》
-- OpenCV / Halcon 官方文档
-- LeetCode 日常刷题
+- OpenCV 官方文档
+- ONNX / TensorRT / NCNN 官方文档（后续阶段）
 
 ## 当前进度与计划
 
@@ -64,11 +70,11 @@ c++/
 - [x] 自主练习：手写 myVec（动态内存 / 深拷贝 / 移动语义 / 模板化）
 - [x] OpenCV 应用：图像读写、灰度、HSV、gamma、直方图、腐蚀膨胀、Otsu 阈值
 - [x] OpenCV 滤波：空间域（高斯 / 中值 / 双边 / 可分离核）、频域概念（dft 流程）
-- [ ] 阈值分割进阶：全局阈值、自适应阈值、连通域
-- [ ] OpenCV 进阶：边缘检测、轮廓、特征匹配
-- [ ] Halcon 入门与工业案例
-- [ ] Qt 上位机：图像显示、参数界面、项目集成
-- [ ] 综合项目：一个完整的视觉检测 Demo
+- [x] OpenCV 检测：连通域、边缘检测（Sobel / Canny）、模板匹配
+- [ ] 相机模型与标定基础（进行中）
+- [ ] Linux 与交叉编译基础
+- [ ] 模型部署：PyTorch → ONNX → 推理框架（ONNX Runtime / TensorRT / NCNN）
+- [ ] 边缘设备上的实时视觉检测项目
 
 ## 说明
 
