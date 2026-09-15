@@ -4,7 +4,7 @@
 
 ## 学习定位
 | 阶段 | 内容 |
-|---|---|---|
+|---|---|
 | 基础 | C++（Primer 精读 + 练习）、Linux 基础 |
 | 图像处理 | OpenCV 应用（预处理 / 检测 / 特征提取） | 
 | 模型部署 | 模型转换（PyTorch → ONNX）、推理框架（ONNX Runtime / TensorRT / NCNN）、量化与加速 |
