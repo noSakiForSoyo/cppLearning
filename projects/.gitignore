@@ -1,0 +1,17 @@
+build*/
+cmake-build-*/
+*.pt
+*.onnx
+*.rknn
+test_images/
+output_images/
+batch_in/
+batch_out/
+*.jpg
+*.png
+__pycache__/
+*.pyc
+venv/
+.venv/
+.vscode/
+.idea/
