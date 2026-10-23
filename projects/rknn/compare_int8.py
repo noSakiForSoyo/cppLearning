@@ -29,7 +29,8 @@ def nms(boxes, scores, thresh):
     order = scores.argsort(descending=True)
     keep = []
     while order.numel() > 0:
-        i = order[0].item(); keep.append(i)
+        i = order[0].item()
+        keep.append(i)
         if order.numel() == 1:
             break
         rest = order[1:]
@@ -72,13 +73,13 @@ def decode(outs ,conf_thres=0.25,iou_thres=0.7):
 img0 = cv2.imread("test.jpg",cv2.IMREAD_COLOR)
 img = letterbox(img0,640)[0]
 img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
-x = (img.astype(np.float32) / 255.0)[None]
+x = img[None]
 
 def build_and_run(do_quant,name):
     rknn = RKNN(verbose=False)
     rknn.config(
         mean_values = [[0,0,0]],
-        std_values = [[1,1,1]],
+        std_values = [[255,255,255]],
         target_platform = 'rk3566',
         quantized_dtype='w8a8',
         quantized_method='channel',         
@@ -92,7 +93,8 @@ def build_and_run(do_quant,name):
         rknn.build(do_quantization=False)
     rknn.init_runtime()
     outs = rknn.inference(inputs=[x])
-
+    outs[0].astype(np.float32).tofile('cpp/coords.bin')
+    outs[1].astype(np.float32).tofile('cpp/scores.bin')
     print("输出个数:", len(outs))
 
     scores = fix_shape(outs[1], 80)
