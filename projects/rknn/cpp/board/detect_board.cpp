@@ -34,9 +34,7 @@ static double now_ms()
     return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
 }
 
-// =====================================================================
-//  读图 + letterbox + RGB
-// =====================================================================
+
 static cv::Mat read_and_letterbox(const char *path,
                                   int dst_w, int dst_h,
                                   float *out_scale,
@@ -47,28 +45,7 @@ static cv::Mat read_and_letterbox(const char *path,
         std::cerr << path << " 打开失败\n";
         return cv::Mat();
     }
-    cvtColor(src, src, COLOR_BGR2RGB);
-
-    float scale = (float)dst_w / std::max(src.cols, src.rows);
-    int nw = (int)round(src.cols * scale);
-    int nh = (int)round(src.rows * scale);
-
-    Mat dst;
-    resize(src, dst, Size(nw, nh));
-
-    int pad_h = (dst_h - nh) / 2;
-    int pad_w = (dst_w - nw) / 2;
-
-    Mat out;
-    copyMakeBorder(dst, out,
-                   pad_h, dst_h - nh - pad_h,
-                   pad_w, dst_w - nw - pad_w,
-                   BORDER_CONSTANT, Scalar(114, 114, 114));
-
-    *out_scale = scale;
-    *out_pad_w = pad_w;
-    *out_pad_h = pad_h;
-    return out;
+    return letterbox(src, dst_w, dst_h, out_scale, out_pad_w, out_pad_h);
 }
 
 int main(int argc, char **argv)
@@ -199,12 +176,6 @@ int main(int argc, char **argv)
         if (src.empty()) { printf("reload src failed\n"); return -1; }
         printf("src %dx%d,  %zu boxes (640-scale)\n", src.cols, src.rows, dets.size());
 
-        // -------------------------------------------------------------
-        //  TODO ③-2  坐标反变换（640 → 原图）并打印
-        //     x_orig = (x_640 - pad_w) / scale
-        //     y_orig = (y_640 - pad_h) / scale
-        //     再 clamp 到 [0, src.cols-1] / [0, src.rows-1]
-        // -------------------------------------------------------------
         for(auto det : dets){
             char text[64];
             snprintf(text, sizeof(text), "cls=%d %.2f", det.cls, det.score);
@@ -217,13 +188,6 @@ int main(int argc, char **argv)
             putText(src,text,Point((int)x1,(int)y1-4),FONT_HERSHEY_SIMPLEX,0.6,Scalar(0,0,255),2);
         }
         imwrite("out.jpg",src);
-        // -------------------------------------------------------------
-        //  TODO ③-3  画框 + 存图
-        //     cv::rectangle(src, cv::Rect(x, y, w, h), cv::Scalar(0,255,0), 2);
-        //     cv::putText(...);
-        //     cv::imwrite("out.jpg", src);
-        // -------------------------------------------------------------
-
 
         printf("\n[验收] 真机结果，反变换后应该落在这些位置附近:\n");
         printf("  cls=41  0.750   (853, 271) - (940, 396)\n");

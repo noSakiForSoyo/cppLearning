@@ -1,6 +1,6 @@
 
 #include "postprocess.hpp"
-
+#include <opencv2/imgproc.hpp>
 float iou(const Box &a, const Box &b)
 {
     float x1 = std::max(a.x1, b.x1);
@@ -148,3 +148,92 @@ std::vector<Detection> decode(const float* coords,
     }
     return det;
 }
+std::vector<Detection> decode_int8(
+    const int8_t *coords,
+    const int8_t *scores,
+    int num_anchors,
+    int num_classes,
+    int coord_zp,
+    float coord_scale,
+    int score_zp,
+    float score_scale,
+    float conf_thres,
+    float iou_thres)
+{
+    const int q_thres =(int)std::floor(conf_thres / score_scale + score_zp) + 1;
+    std::vector<float> conf;
+    std::vector<int> cls;
+    std::vector<float> scores_t;
+    std::vector<int> cls_t;
+    Box xyxy;
+    std::vector<Box> boxes;
+    float cx, cy, w, h;
+    for (int i = 0; i < num_anchors; i++)
+    {
+        int best = -128;
+        size_t best_c = 0;
+        for (int c = 0; c < num_classes; c++)
+        {
+            if (scores[c * num_anchors + i] > best)
+            {
+                best = scores[c * num_anchors + i];
+                best_c = c;
+            }
+        }
+        if(best<q_thres)
+        {
+            continue;
+        }
+
+            cx = (coords[i]-coord_zp)*coord_scale;
+            cy = (coords[num_anchors + i]-coord_zp)*coord_scale;
+            w = (coords[2 * num_anchors + i]-coord_zp)*coord_scale;
+            h = (coords[3 * num_anchors + i]-coord_zp)*coord_scale;
+            xyxy.x1 = cx - w / 2;
+            xyxy.y1 = cy - h / 2;
+            xyxy.x2 = cx + w / 2;
+            xyxy.y2 = cy + h / 2;
+            boxes.push_back(xyxy);
+            scores_t.push_back((best - score_zp) * score_scale);
+            cls_t.push_back(best_c);
+    }
+    std::vector<int> keep = nms_class_aware(boxes, scores_t, cls_t, iou_thres);
+    std::vector<Detection> det;
+    for (int i = 0; i < keep.size(); i++)
+    {
+        Detection d;
+        d.box = boxes[keep[i]];
+        d.cls = cls_t[keep[i]];
+        d.score = scores_t[keep[i]];
+        det.push_back(d);
+    }
+    return det;
+}
+cv::Mat letterbox(const cv::Mat &bgr,
+                        int dst_w,int dst_h,
+                        float *out_scale,
+                        int *out_pad_w,int *out_pad_h)
+{
+    Mat rgb;
+    cvtColor(bgr,rgb,COLOR_BGR2RGB);
+     float scale = (float)dst_w / std::max(rgb.cols, rgb.rows);
+    int nw = (int)round(rgb.cols * scale);
+    int nh = (int)round(rgb.rows * scale);
+
+    Mat dst;
+    resize(rgb, dst, Size(nw, nh));
+
+    int pad_h = (dst_h - nh) / 2;
+    int pad_w = (dst_w - nw) / 2;
+
+    Mat out;
+    copyMakeBorder(dst, out,
+                   pad_h, dst_h - nh - pad_h,
+                   pad_w, dst_w - nw - pad_w,
+                   BORDER_CONSTANT, Scalar(114, 114, 114));
+
+    *out_scale = scale;
+    *out_pad_w = pad_w;
+    *out_pad_h = pad_h;
+    return out;
+};
