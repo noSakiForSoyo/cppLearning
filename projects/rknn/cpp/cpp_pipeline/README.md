@@ -1,27 +1,26 @@
-# C++ Multithreaded Image Pipeline
+# C++ 多线程图像流水线
 
-A small reusable image-processing pipeline built with C++17 and OpenCV.
-It separates data acquisition, processing, and output into Source / Stage / Sink,
-and overlaps acquisition with processing through a bounded queue and one producer thread.
+一个用 C++17 + OpenCV 写的可复用图像处理流水线。
+它把“采集 / 处理 / 输出”拆成 Source / Stage / Sink，并用有界队列 + 一个采集线程把读取和处理重叠起来。
 
-## Architecture
+## 架构
 
     VideoFileSource
           |
           v
-    BoundedQueue<Frame>   capacity = 3 or 64
+    BoundedQueue<Frame>   容量 3 或 64
           |
           v
-    Pipeline worker: Stage -> Sink
+    Pipeline 消费线程：Stage -> Sink
           |
           v
     ResizeStage -> VideoSink
 
-The producer thread runs Source::read and pushes Frame objects into a bounded queue.
-The consumer thread pops frames, runs Stage::process, then Sink::write.
-When the queue is full, the oldest frame is dropped so latency stays bounded.
+采集线程只负责 Source::read，把 Frame 推进队列。
+消费线程从队列取帧，执行 Stage::process，再执行 Sink::write。
+队列满时丢最旧帧，避免延迟越积越大。
 
-## Interfaces
+## 接口
 
     struct Frame {
         cv::Mat image;      // BGR
@@ -33,62 +32,61 @@ When the queue is full, the oldest frame is dropped so latency stays bounded.
     class Stage  { virtual bool process(Frame&) = 0; };
     class Sink   { virtual bool write(const Frame&) = 0; };
 
-Concrete implementations:
+具体实现：
 
-- VideoFileSource: OpenCV VideoCapture with the FFMPEG backend
-- ResizeStage: resize to 640x360
-- VideoSink: OpenCV VideoWriter using mp4v
-- NullSink: benchmark-only sink that discards frames
+- VideoFileSource：OpenCV VideoCapture，强制 FFMPEG 后端
+- ResizeStage：缩放到 640x360
+- VideoSink：OpenCV VideoWriter，使用 mp4v
+- NullSink：benchmark 用的空输出
 
-## Build
+## 构建
 
     cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
     cmake --build build -j
 
-Release mode matters for benchmark numbers.
+benchmark 必须用 Release，否则数字没有意义。
 
-## Run the video demo
+## 运行视频 demo
 
     ./build/tests/tests /path/to/video.mp4
 
-The output is pipeline_out.mp4 in the current directory.
-The video source is opened through CAP_FFMPEG, so a file path is not parsed as a GStreamer pipeline.
+输出文件为当前目录下的 pipeline_out.mp4。
+视频源使用 CAP_FFMPEG，所以文件路径不会被当成 GStreamer 管道解析。
 
 ## Benchmark
 
     ./build/tests/benchmark
 
-Synthetic workload: 300 frames, 640x480 BGR, 9x9 GaussianBlur, NullSink.
-Representative Release run on the WSL development machine:
+合成负载：300 帧、640x480 BGR、9x9 GaussianBlur、NullSink。
+WSL 开发机 Release 模式的一次代表性结果：
 
     single        767.462 ms   390.90 FPS
     pipe cap=64   560.418 ms   535.32 FPS
     pipe cap=3    548.224 ms   547.22 FPS
 
-All three cases processed 300 frames. The pipeline improved throughput by about 1.37-1.40x.
-The cap=3 run did not drop frames in this workload because production and consumption
-were roughly balanced; it is a queue-bound test, not a drop test.
+三种配置都处理完 300 帧，流水线吞吐约提升 1.37–1.40 倍。
+cap=3 这一轮没有丢帧，因为生产和消费速度接近；
+它是队列容量测试，不是丢帧测试。
 
-Numbers vary by a few percent between runs. Run the benchmark several times before
-quoting a final figure.
+数字每次会有几个百分点波动，写简历前建议多跑几次。
 
-## Design notes
+## 设计说明
 
-- Frame is moved into the queue; no shared mutable image between threads.
-- The consumer owns the frame while running Stage and Sink.
-- Stop wakes the consumer; it drains queued frames before returning false.
-- Queue capacity 64 is used for lossless verification; capacity 3 is the real-time mode.
-- The benchmark excludes disk I/O by using NullSink; the video demo measures the full path.
+- Frame 通过 std::move 进入队列，线程之间不共享可变图像；
+- 消费线程独占当前帧，负责 Stage 和 Sink；
+- stop 会唤醒消费者，消费者把队列里剩下的帧处理完再退出；
+- 容量 64 用于无损验证，容量 3 用于实时模式；
+- benchmark 用 NullSink 排除磁盘 I/O，视频 demo 才是完整路径。
 
-## Limitations and next work
+## 已知限制
 
-- One worker thread, not a thread pool.
-- No camera Source yet; VideoFileSource is the current input.
-- No dropped-frame counter or per-stage metrics yet.
-- Next: add a camera source, queue drop counters, and per-stage timing.
+- 只有一个 worker 线程，不是线程池；
+- 还没有 CameraSource；
+- 还没有丢帧计数和分阶段耗时；
+- 下一步：摄像头源、dropped 计数、每段耗时统计。
 
-## Layout
+## 目录
 
-    include/pipeline/   interfaces, bounded queue, pipeline declaration
-    src/                pipeline and concrete video adapters
-    tests/              video demo and synthetic benchmark
+    include/pipeline/   接口、有界队列、Pipeline 声明
+    src/                Pipeline 实现和视频适配器
+    tests/              视频 demo 和合成 benchmark

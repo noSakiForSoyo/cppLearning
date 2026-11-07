@@ -225,7 +225,7 @@ int main(int argc, char **argv)
 
       double t5 = now_ms();
       std::vector<Detection> dets =
-          decode_int8(coords, scores,  NA, NC, out_attrs[0].zp, out_attrs[0].scale, out_attrs[1].zp, out_attrs[1].scale, 0.25f, 0.7f);
+          decode_int8(coords, scores, NA, NC, out_attrs[0].zp, out_attrs[0].scale, out_attrs[1].zp, out_attrs[1].scale, 0.25f, 0.5f);
       double t6 = now_ms();
       t_decode += t6 - t5;
 

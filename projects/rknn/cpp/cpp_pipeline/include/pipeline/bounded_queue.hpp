@@ -19,8 +19,10 @@ public:
             return false;
 
         if (q_.size() >= cap_)
+        {
             q_.pop_front();
-
+            dropped_++;
+        }
         q_.push_back(std::move(item));
         cv_.notify_one();
         return true;
@@ -29,7 +31,8 @@ public:
     bool pop(T &item)
     {
         std::unique_lock<std::mutex> lock(m_);
-        cv_.wait(lock, [this] { return stopped_ || !q_.empty(); });
+        cv_.wait(lock, [this]
+                 { return stopped_ || !q_.empty(); });
 
         if (q_.empty())
             return false;
@@ -64,6 +67,10 @@ public:
         std::lock_guard<std::mutex> lock(m_);
         return q_.size();
     }
+    std::size_t dropped() const
+    {
+        return dropped_.load();
+    }
 
 private:
     std::deque<T> q_;
@@ -71,4 +78,5 @@ private:
     mutable std::mutex m_;
     std::condition_variable cv_;
     bool stopped_ = false;
+    std::atomic<std::size_t> dropped_{0};
 };

@@ -18,6 +18,8 @@ public:
              std::size_t capacity = 3);
     bool run();
     void stop();
+    std::size_t dropped() const;
+    void printStats();
 
 private:
     Source &source_;
