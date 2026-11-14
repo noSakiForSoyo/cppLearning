@@ -1,109 +1,99 @@
-# C++ & Edge Vision Deployment Learning
+# C++ 边缘视觉部署实践
 
-面向**边缘视觉部署**岗位的学习与工程实践仓库：以 C++ 为主，覆盖传统图像处理、深度学习模型部署链路（PyTorch → ONNX → RKNN）、交叉编译与边缘设备落地。
+> 在 RK3566（4×Cortex-A55 / 1 TOPS NPU）上用**纯 C++** 部署 YOLOv8n INT8：
+> V4L2 采集 → letterbox → RKNN 推理 → 自写 NMS / 坐标反变换 → GStreamer 硬件编码。
+>
+> **端到端 102.6 ms / 9.6 FPS，连续 30 分钟长稳，峰值 67.5 °C。**
 
-## 学习定位
+## 核心项目
 
-| 阶段 | 内容 | 目标 |
-|---|---|---|
-| 语言基础 | C++ Primer 精读、泛型算法、RAII、多态与智能指针 | 工程语言能力 |
-| 图像处理 | OpenCV：预处理、滤波、阈值分割、边缘检测、模板匹配、相机模型 | 视觉算法基础 |
-| 模型链路 | PyTorch / YOLOv8 → ONNX → RKNN，NMS、letterbox、INT8 量化 | 部署前处理 |
-| 边缘落地 | aarch64 交叉编译、Docker 构建环境、RK3566 设备部署 | 目标平台交付 |
+### 一、RK3566 实时检测部署
 
-## 目录结构
+| 指标 | 值 |
+|---|---|
+| 端到端延迟 | **102.63 ms** |
+| 持续吞吐 | **9.61 FPS**（1800 s / 17,294 帧） |
+| 峰值温度 | **67.5 °C**，全程 1.8 GHz 未降频 |
+| 稳定性 | 30 分钟 USB 无掉线、内存无上涨 |
+| 输出 | 1280×720 H.264 硬编 |
+
+做过的事，每一条都有数字：
+
+- **INT8 混量级**：`output0` (1,84,8400) 里坐标 0–640 与置信度 0–1 共用一个 per-tensor scale（3.7956），0.75 的分数被量化抹成 0；在 ONNX 末尾插 `Split` 拆成 coords / scores，分数 scale 细化至 0.00294（细了 1290 倍）。
+- **整数域后处理**：`want_float=0` + int8 阈值判定，只对过阈框反量化；`decode` 12.27 → 4.95 ms。
+- **NMS 阈值**：重复框不是量化问题（float 同样出现，实测 IoU 0.57–0.68），`iou_thres` 0.7 → 0.5 后消除。
+- **DDR 调频**：默认 780 MHz 是带宽瓶颈，切 performance（1056 MHz）后单图 180.96 → 126.26 ms；单独钉 NPU 频率无收益，据此排除算力因素。
+- **采集帧率匹配消费速率**：30 → 10 fps，丢帧 69% → 3.8%，峰值温度 76.9 → 67.5 °C。
+
+代码：[projects/rknn/cpp/board](projects/rknn/cpp/board) —— 单图 / 视频 / 摄像头(float) / 摄像头(int8) 四个入口。
+
+### 二、多线程图像流水线（可复用组件）
+
+[projects/rknn/cpp/cpp_pipeline](projects/rknn/cpp/cpp_pipeline) —— Source / Stage / Sink 三段接口 + 有界队列。
+
+- 采集线程与消费线程重叠；帧以 `std::move` 入队，线程间不共享可变图像；队列满丢最旧，延迟有界。
+- 合成负载 300 帧：单线程 **390.90 FPS** → 流水线 **547.22 FPS**（1.37–1.40x）
+- 交叉编译到板上 A55 同负载：**57.01 → 81.10 FPS（1.42x）**
+- 作为骨架接入 NPU 检测：端到端 **102.63 ms / 9.61 FPS**
+
+## 仓库结构
 
 ```
 cppLearning/
-├── exercises/                     # 基础练习
-│   ├── primer/                    # C++ Primer 章节练习（ch1~ch8）
-│   ├── vision/                    # OpenCV 应用练习（1.Mat ~ 13.matchTemplate）
-│   └── own/myVec/                 # 手写 vector 容器（模板版）
-├── projects/                      # 工程实践（CMake 组织，include/src/app/tests）
-│   ├── 1.test_demo/               # CMake 工程结构入门
-│   ├── 2.my_vec/                  # myVec 模块化重构 + aarch64 交叉编译工具链
-│   ├── 3.cv_demo/                 # OpenCV 集成工程
-│   ├── 4.virtual_demo/            # 多态图像处理管线（filter 抽象 + pipe_line）
-│   ├── py-lab/                    # Python 实验：PyTorch / ONNX / NMS / letterbox / YOLO
-│   ├── rknn/                      # RKNN 部署管线：转换、输出拆分、INT8 量化、精度对比
-│   ├── CMakeLists.txt             # 顶层构建
-│   ├── create.sh                  # 新项目脚手架
-│   ├── py.sh                      # Python 虚拟环境入口
-│   └── scp.sh                     # 交叉编译与设备部署
-├── project/                       # Windows 侧 VS2022 CMake 工程
-├── notes/c++learning/             # Obsidian 笔记（C++ / 视觉 / LeetCode）
-└── a.sh
+├── projects/
+│   ├── rknn/
+│   │   ├── cpp/board/          # 板端四个检测入口 + 自写后处理
+│   │   ├── cpp/cpp_pipeline/   # 多线程流水线 + DetectStage
+│   │   ├── cpp/official/       # RKNN 官方参考实现（对照用）
+│   │   ├── cpp/rknn_lib/       # rknn_api.h + librknnrt
+│   │   ├── quantize.py         # INT8 量化 / 校准
+│   │   ├── split_onnx.py       # 输出拆分
+│   │   └── compare_int8.py     # 仿真 vs 真机精度对比
+│   ├── py-lab/                 # PyTorch 推理 / ONNX 导出 / 手写 NMS / letterbox
+│   ├── 2.my_vec/               # 手写 vector + aarch64 交叉编译工具链
+│   ├── 4.virtual_demo/         # 多态图像处理管线（filter 抽象）
+│   └── ...
+├── exercises/                  # C++ Primer 练习 / OpenCV 练习 / 手写容器
+├── docs/                       # 4 篇技术文档
+└── notes/
 ```
 
-## 项目亮点
-
-### 一、手写算法：理解原理而非只会调 API
-
-- **Otsu 自动阈值**（`exercises/vision/7.otsuMethod`）
-  直方图统计 → 类间方差最大化 → LUT 查表二值化；手写实现与 OpenCV `THRESH_OTSU` 结果验证一致。
-- **myVec 容器**（`exercises/own/myVec`、`projects/2.my_vec`）
-  动态内存管理 → 深拷贝（拷贝构造/赋值）→ 移动语义（noexcept）→ 模板化；另有 `unique_ptr` 版本实现。
-
-### 二、多态图像处理管线（`projects/4.virtual_demo`）
-
-- `filter` 抽象基类：虚析构 + 纯虚 `apply()` / `name()` 接口
-- `pipe_line` 以 `std::vector<std::unique_ptr<filter>>` 组合处理器，运行期动态组装处理链（灰度、高斯滤波等）
-- 练习要点：多态、智能指针所有权、可扩展管线设计
-
-### 三、边缘部署链路（`projects/rknn` + `projects/py-lab`）
-
-- **前处理**：letterbox 缩放、手写 NMS
-- **模型导出与探查**：PyTorch → ONNX、ONNX 结构探查
-- **RKNN 转换**：`rknn.load_onnx` → `rknn.build`（`target_platform = rk3566`，含 mean/std 归一化配置）
-- **INT8 量化**：`quantized_dtype = w8a8` + 校准集（`calib.txt` / `calib_self.txt`）
-- **工程处理**：ONNX 输出拆分、仿真验证、INT8 与浮点精度对比
-
-### 四、交叉编译与设备部署（`projects/2.my_vec` + `scp.sh`）
-
-- CMake toolchain：`CMAKE_SYSTEM_PROCESSOR=aarch64`、`aarch64-linux-gnu-g++`
-- Docker 构建镜像（rk3566-builder）保证环境可复现
-- 构建产物通过 `scp` 部署至边缘设备
-
-## 技术栈与环境
-
-- 语言：C++17、Python 3
-- 视觉：OpenCV 4.x
-- 深度学习：PyTorch、YOLOv8、ONNX / ONNX Runtime
-- 边缘部署：RKNN Toolkit2、RK3566、aarch64 交叉编译
-- 工程工具：CMake、Docker、Git
-- 开发环境：Windows（VS2022）+ WSL2（Ubuntu）
-
-## 构建方式
-
-`projects/` 下各工程独立组织，源码位于 `include` / `src` / `app` / `tests`：
+## 快速开始
 
 ```bash
-cd projects/<project>
+# 普通工程
+cd projects/2.my_vec
 cmake -B build && cmake --build build
 
-# 交叉编译（以 my_vec 为例）
+# 交叉编译到 aarch64
 cmake -B build -DCMAKE_TOOLCHAIN_FILE=cmake/aarch64-toolchain.cmake
+
+# 板端检测（在板子上原生编译，见 cpp_pipeline/README.md）
+cd projects/rknn/cpp/cpp_pipeline
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOpenCV_DIR=$(pwd)/cmake
+cmake --build build -j4
+./build/tests/tests 1800
 ```
 
-## 当前进度
+## 技术栈
 
-- [x] C++ 基础：顺序容器、类、函数、IO、泛型算法、RAII
-- [x] 手写 myVec：内存管理 / 深拷贝 / 移动语义 / 模板化
-- [x] OpenCV：图像基础、滤波（空间域/频域）、阈值分割、边缘检测、连通域、模板匹配
-- [x] C++ 工程实践：CMake 多模块组织、多态管线、智能指针
-- [x] Python 链路：PyTorch 推理、NMS、letterbox、ONNX 导出与探查
-- [x] RKNN 转换与 INT8 量化（含校准集与精度对比）
-- [x] aarch64 交叉编译与设备部署
-- [ ] 相机模型与标定
-- [ ] 完整边缘视觉检测项目（检测 → 量化 → 设备端实时推理）
+C++17 · OpenCV 4.2 · RKNN-Toolkit2 2.3.2 · YOLOv8n · GStreamer(mpph264enc) · CMake · Docker · aarch64 交叉编译
 
-## 学习资料
+## 文档
 
-- 《C++ Primer（第5版）》
-- 《数字图像处理（冈萨雷斯 第3版）》
-- OpenCV / ONNX / RKNN Toolkit2 官方文档
+| 文档 | 内容 |
+|---|---|
+| [K11C-setup-guide.md](docs/K11C-setup-guide.md) | 板子环境：刷机 / 网络 / SSH / 交叉编译 |
+| [RKNN-INT8-踩坑记录.md](docs/RKNN-INT8-踩坑记录.md) | 输出拆头、量化抹平、精度对齐 |
+| [P4-RKNN接入指南.md](docs/P4-RKNN接入指南.md) | rknn_init / inputs_set / outputs_get 全链路 |
+| [P4-板上跑通记录.md](docs/P4-板上跑通记录.md) | 上板过程与 runtime 版本坑 |
+
+## 手写实现（理解原理）
+
+- **myVec**：动态内存 → 深拷贝 → 移动语义 → 模板化（`exercises/own/myVec`、`projects/2.my_vec`）
+- **Otsu**：直方图 → 类间方差最大化 → LUT 二值化，与 OpenCV `THRESH_OTSU` 对比一致
+- **NMS / IoU / 坐标反变换**：在板端后处理里实际使用
 
 ## 说明
 
-- 本仓库为个人学习与实践记录，仅供学习交流
-- 练习代码均为本人编写；手写实现（Otsu、myVec、NMS）用于理解原理，生产场景以官方库为准
+个人学习与工程实践记录。手写实现用于理解原理，生产场景以官方库为准。
