@@ -29,10 +29,15 @@ void DetectStage::release_()
     rknn_outputs_release(ctx_, io_.n_output, outs_);
   if (outs_)
     free(outs_);
-  if (ctx_)
-    rknn_destroy(ctx_);
-  ctx_ = 0;
   outs_ = nullptr;
+  if (ctx_)
+  {
+    for (int i = 0; i < 2; ++i)
+      if (out_mem_[i]) { rknn_destroy_mem(ctx_, out_mem_[i]); out_mem_[i] = nullptr; }
+    rknn_destroy(ctx_);
+  }
+  ctx_ = 0;
+  zero_copy_ = false;
 }
 bool DetectStage::process(Frame &frame)
 {
@@ -75,19 +80,30 @@ bool DetectStage::process(Frame &frame)
     return false;
   }
 
-  ret = rknn_outputs_get(ctx_, io_.n_output, outs_, NULL);
-  if (ret < 0)
+  const int8_t *coords = nullptr;
+  const int8_t *scores = nullptr;
+  if (zero_copy_)
   {
-    printf("outputs_get failed %d\n", ret);
-    release_();
-    return false;
+    rknn_mem_sync(ctx_, out_mem_[0], RKNN_MEMORY_SYNC_FROM_DEVICE);
+    rknn_mem_sync(ctx_, out_mem_[1], RKNN_MEMORY_SYNC_FROM_DEVICE);
+    coords = (const int8_t *)out_mem_[0]->virt_addr;
+    scores = (const int8_t *)out_mem_[1]->virt_addr;
   }
-  outs_got_ = true;
+  else
+  {
+    ret = rknn_outputs_get(ctx_, io_.n_output, outs_, NULL);
+    if (ret < 0)
+    {
+      printf("outputs_get failed %d\n", ret);
+      release_();
+      return false;
+    }
+    outs_got_ = true;
+    coords = (const int8_t *)outs_[0].buf;
+    scores = (const int8_t *)outs_[1].buf;
+  }
   double t4 = now_ms();
   t_get_ += t4 - t3;
-  // printf("infer %.2f ms,  outputs_get %.2f ms\n", t3 - t2, t4 - t3);
-  const int8_t *coords = (const int8_t *)outs_[0].buf;
-  const int8_t *scores = (const int8_t *)outs_[1].buf;
   const int NA = out_attrs_[0].dims[2], NC = out_attrs_[1].dims[1];
 
   double t5 = now_ms();
@@ -109,8 +125,11 @@ bool DetectStage::process(Frame &frame)
     putText(frame.image, text, cv::Point((int)x1, (int)y1 - 4), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 255), 2);
   }
   t_draw_ += now_ms() - t7;
-  rknn_outputs_release(ctx_, io_.n_output, outs_);
-  outs_got_ = false;
+  if (outs_got_)
+  {
+    rknn_outputs_release(ctx_, io_.n_output, outs_);
+    outs_got_ = false;
+  }
   frames_++;
   elapsed_ += now_ms() - p1;
   return true;
@@ -209,6 +228,24 @@ bool DetectStage::init_(const char *path)
     outs_[i].index = i;
     outs_[i].want_float = 0;
   }
+  // ---- zero-copy: bind outputs to NPU memory, skip the rknn_outputs_get copy ----
+  zero_copy_ = true;
+  for (uint32_t i = 0; i < io_.n_output; ++i)
+  {
+    out_attrs_[i].type = RKNN_TENSOR_INT8;
+    out_attrs_[i].fmt  = RKNN_TENSOR_NCHW;
+    uint32_t sz = out_attrs_[i].size_with_stride ? out_attrs_[i].size_with_stride
+                                                 : out_attrs_[i].size;
+    out_mem_[i] = rknn_create_mem(ctx_, sz);
+    if (!out_mem_[i] || rknn_set_io_mem(ctx_, out_mem_[i], &out_attrs_[i]) < 0)
+    {
+      printf("!! zero-copy bind output %u failed, fallback to rknn_outputs_get\n", i);
+      zero_copy_ = false;
+      break;
+    }
+  }
+  if (zero_copy_)
+    printf("zero-copy: %u outputs bound\n", io_.n_output);
   ready_ = true;
   return true;
 }
