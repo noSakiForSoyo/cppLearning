@@ -1,3 +1,5 @@
 build/
 pipeline_out.mp4
 *_fallback.avi
+sysroot/
+build-arm/
