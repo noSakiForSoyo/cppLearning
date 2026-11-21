@@ -23,8 +23,6 @@ private:
   rknn_tensor_attr in_attr_;
   rknn_tensor_attr out_attrs_[2]{};
   rknn_output *outs_=nullptr;
-  rknn_tensor_mem *out_mem_[2] = {nullptr, nullptr};
-  bool zero_copy_ = false;
   int MW_ = 0, MH_ = 0;
   int pad_w_ = 0, pad_h_ = 0;
   float conf_ = 0.25f, iou_ = 0.5f,scale_;
