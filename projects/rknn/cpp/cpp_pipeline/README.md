@@ -87,6 +87,32 @@ cmake --build build -j
 ./build/tests/benchmark
 ```
 
+
+### 交叉编译（x86 → aarch64，Docker）
+
+```bash
+# 1. 从板子抽 sysroot（首次或库变更时跑一次）
+./scripts/make_sysroot.sh root@192.168.137.100
+
+# 2. 在 rk3566-builder 镜像里交叉编译（Ubuntu 20.04 + gcc 9.4 交叉工具链）
+docker run --rm -v "$PWD:/work" -w /work --user "$(id -u):$(id -g)" rk3566-builder \
+  bash -c 'cmake -S . -B build-arm \
+             -DCMAKE_TOOLCHAIN_FILE=cmake/aarch64-rk3566.cmake \
+             -DOpenCV_DIR=/work/cmake \
+             -DCMAKE_LIBRARY_PATH=/work/sysroot/usr/lib \
+             -DCMAKE_BUILD_TYPE=Release &&
+           cmake --build build-arm -j4'
+
+# 3. 产物直接拷到板子上跑
+scp build-arm/tests/tests root@192.168.137.100:/root/rk/cpp_pipeline/
+```
+
+产物是 ELF 64-bit ARM aarch64，只要求 GLIBC_2.17（板子是 2.31），板端实测 **103.6 ms / 9.6 FPS**。
+
+> **为什么必须在 20.04 镜像里编**：交叉工具链的 libc 跟着宿主发行版走。
+> 在 WSL（26.04）里直接交叉编，产物要 GLIBC_2.34，上板就是 not found。
+> sysroot 里只放第三方的 OpenCV / rknnrt，libc 和 libstdc++ 用工具链自带的 20.04 版本。
+
 ## 运行
 
 ```bash
